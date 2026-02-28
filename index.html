@@ -1,0 +1,972 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>思い出ストック - 二人の歴史タイムライン</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    :root {
+      --primary: #6366f1;
+      --primary-light: #a5b4fc;
+      --primary-dark: #4338ca;
+      --accent: #f43f5e;
+      --accent-light: #fda4af;
+      --bg: #f8f7ff;
+      --card: #ffffff;
+      --text: #1e1b4b;
+      --text-light: #6b7280;
+      --border: #e5e7eb;
+      --shadow: 0 4px 24px rgba(99, 102, 241, 0.10);
+      --radius: 16px;
+    }
+
+    body {
+      font-family: 'Segoe UI', 'Hiragino Sans', 'Meiryo', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+    }
+
+    /* ===== Header ===== */
+    header {
+      background: linear-gradient(135deg, var(--primary), var(--accent));
+      color: #fff;
+      text-align: center;
+      padding: 32px 20px 48px;
+      position: relative;
+    }
+    header::after {
+      content: '';
+      position: absolute;
+      bottom: -24px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 130%;
+      height: 50px;
+      background: var(--bg);
+      border-radius: 50%;
+    }
+    header h1 { font-size: 1.5rem; font-weight: 700; }
+    header p { font-size: 0.88rem; opacity: 0.85; margin-top: 4px; }
+
+    .day-counter {
+      margin-top: 16px;
+      display: inline-block;
+      background: rgba(255,255,255,0.2);
+      backdrop-filter: blur(8px);
+      border-radius: 40px;
+      padding: 10px 28px;
+    }
+    .day-counter .num {
+      font-size: 2rem;
+      font-weight: 800;
+    }
+    .day-counter .label {
+      font-size: 0.85rem;
+      opacity: 0.9;
+    }
+    .anniversary-setting {
+      margin-top: 8px;
+      font-size: 0.78rem;
+      opacity: 0.7;
+      cursor: pointer;
+      text-decoration: underline;
+    }
+
+    /* ===== Container ===== */
+    .container {
+      max-width: 640px;
+      margin: 0 auto;
+      padding: 0 16px 40px;
+    }
+
+    /* ===== Tabs ===== */
+    .tabs {
+      display: flex;
+      gap: 4px;
+      margin-top: 32px;
+      background: var(--card);
+      border-radius: 12px;
+      padding: 4px;
+      box-shadow: var(--shadow);
+    }
+    .tab {
+      flex: 1;
+      padding: 10px;
+      text-align: center;
+      border: none;
+      background: transparent;
+      border-radius: 10px;
+      font-size: 0.88rem;
+      font-weight: 600;
+      color: var(--text-light);
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .tab.active {
+      background: var(--primary);
+      color: #fff;
+    }
+    .tab:hover:not(.active) { background: #f3f4f6; }
+
+    /* ===== Map ===== */
+    .map-section { margin-top: 20px; }
+    #map {
+      width: 100%;
+      height: 360px;
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      z-index: 1;
+    }
+    .map-hint {
+      text-align: center;
+      font-size: 0.78rem;
+      color: var(--text-light);
+      margin-top: 8px;
+    }
+
+    /* ===== Timeline ===== */
+    .timeline-section { margin-top: 20px; }
+    .timeline {
+      position: relative;
+      padding-left: 28px;
+    }
+    .timeline::before {
+      content: '';
+      position: absolute;
+      left: 8px;
+      top: 0;
+      bottom: 0;
+      width: 3px;
+      background: linear-gradient(180deg, var(--primary), var(--accent));
+      border-radius: 2px;
+    }
+    .tl-item {
+      position: relative;
+      margin-bottom: 20px;
+      animation: fadeUp 0.4s ease;
+    }
+    @keyframes fadeUp {
+      from { opacity: 0; transform: translateY(16px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    .tl-dot {
+      position: absolute;
+      left: -24px;
+      top: 18px;
+      width: 18px;
+      height: 18px;
+      border-radius: 50%;
+      border: 3px solid var(--primary);
+      background: var(--card);
+    }
+    .tl-card {
+      background: var(--card);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      padding: 16px;
+      cursor: pointer;
+      transition: transform 0.2s;
+    }
+    .tl-card:hover { transform: translateY(-2px); }
+    .tl-date {
+      font-size: 0.78rem;
+      color: var(--primary);
+      font-weight: 600;
+    }
+    .tl-title {
+      font-size: 1.05rem;
+      font-weight: 700;
+      margin-top: 4px;
+    }
+    .tl-location {
+      font-size: 0.8rem;
+      color: var(--text-light);
+      margin-top: 2px;
+    }
+    .tl-photos {
+      display: flex;
+      gap: 6px;
+      margin-top: 10px;
+      overflow-x: auto;
+    }
+    .tl-photos img {
+      width: 80px;
+      height: 80px;
+      object-fit: cover;
+      border-radius: 10px;
+      flex-shrink: 0;
+    }
+    .tl-category {
+      display: inline-block;
+      padding: 2px 10px;
+      border-radius: 12px;
+      font-size: 0.72rem;
+      font-weight: 600;
+      margin-top: 8px;
+    }
+    .tl-memo {
+      font-size: 0.82rem;
+      color: var(--text-light);
+      margin-top: 6px;
+      line-height: 1.5;
+    }
+    .tl-actions {
+      display: flex;
+      gap: 8px;
+      margin-top: 10px;
+      justify-content: flex-end;
+    }
+    .tl-actions button {
+      background: none;
+      border: none;
+      font-size: 0.78rem;
+      cursor: pointer;
+      color: var(--text-light);
+      padding: 4px 8px;
+      border-radius: 6px;
+      transition: all 0.2s;
+    }
+    .tl-actions button:hover { background: #f3f4f6; }
+    .tl-actions .del:hover { color: #ef4444; }
+
+    /* Category colors */
+    .cat-food { background: #fff7ed; color: #ea580c; }
+    .cat-travel { background: #eff6ff; color: #2563eb; }
+    .cat-event { background: #fdf2f8; color: #db2777; }
+    .cat-daily { background: #f0fdf4; color: #16a34a; }
+    .cat-other { background: #f3f4f6; color: #6b7280; }
+
+    /* ===== Add Button (FAB) ===== */
+    .fab {
+      position: fixed;
+      bottom: 24px;
+      right: 24px;
+      width: 56px;
+      height: 56px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, var(--primary), var(--accent));
+      color: #fff;
+      border: none;
+      font-size: 1.8rem;
+      box-shadow: 0 4px 20px rgba(99,102,241,0.35);
+      cursor: pointer;
+      z-index: 1000;
+      transition: transform 0.2s;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .fab:hover { transform: scale(1.1); }
+
+    /* ===== Modal ===== */
+    .modal-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.5);
+      z-index: 2000;
+      align-items: center;
+      justify-content: center;
+      padding: 16px;
+    }
+    .modal-overlay.show { display: flex; }
+    .modal {
+      background: var(--card);
+      border-radius: var(--radius);
+      padding: 24px;
+      width: 100%;
+      max-width: 480px;
+      max-height: 90vh;
+      overflow-y: auto;
+      animation: modalIn 0.3s ease;
+    }
+    @keyframes modalIn {
+      from { opacity: 0; transform: scale(0.95) translateY(20px); }
+      to { opacity: 1; transform: scale(1) translateY(0); }
+    }
+    .modal h2 {
+      font-size: 1.1rem;
+      color: var(--primary-dark);
+      margin-bottom: 16px;
+    }
+    .form-group {
+      margin-bottom: 14px;
+    }
+    .form-group label {
+      display: block;
+      font-size: 0.82rem;
+      font-weight: 600;
+      color: var(--text-light);
+      margin-bottom: 4px;
+    }
+    .form-group input[type="text"],
+    .form-group input[type="date"],
+    .form-group textarea,
+    .form-group select {
+      width: 100%;
+      padding: 10px 14px;
+      border: 2px solid var(--border);
+      border-radius: 10px;
+      font-size: 0.92rem;
+      outline: none;
+      transition: border-color 0.2s;
+      font-family: inherit;
+    }
+    .form-group input:focus,
+    .form-group textarea:focus,
+    .form-group select:focus {
+      border-color: var(--primary-light);
+    }
+    .form-group textarea { resize: vertical; min-height: 60px; }
+
+    .location-picker {
+      margin-top: 8px;
+    }
+    #miniMap {
+      width: 100%;
+      height: 200px;
+      border-radius: 10px;
+      margin-top: 8px;
+      z-index: 2001;
+    }
+    .location-picker-hint {
+      font-size: 0.75rem;
+      color: var(--text-light);
+      margin-top: 4px;
+    }
+
+    .photo-upload-area {
+      border: 2px dashed var(--border);
+      border-radius: 10px;
+      padding: 20px;
+      text-align: center;
+      cursor: pointer;
+      transition: all 0.2s;
+      position: relative;
+    }
+    .photo-upload-area:hover { border-color: var(--primary-light); background: #fafaff; }
+    .photo-upload-area input { display: none; }
+    .photo-upload-area .upload-icon { font-size: 1.8rem; }
+    .photo-upload-area .upload-text { font-size: 0.82rem; color: var(--text-light); margin-top: 4px; }
+    .photo-previews {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      margin-top: 10px;
+    }
+    .photo-previews .preview-item {
+      position: relative;
+      width: 72px;
+      height: 72px;
+    }
+    .photo-previews img {
+      width: 72px;
+      height: 72px;
+      object-fit: cover;
+      border-radius: 8px;
+    }
+    .photo-previews .remove-photo {
+      position: absolute;
+      top: -6px;
+      right: -6px;
+      width: 20px;
+      height: 20px;
+      border-radius: 50%;
+      background: #ef4444;
+      color: #fff;
+      border: none;
+      font-size: 0.7rem;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .modal-actions {
+      display: flex;
+      gap: 10px;
+      margin-top: 20px;
+    }
+    .btn {
+      flex: 1;
+      padding: 12px;
+      border: none;
+      border-radius: 10px;
+      font-size: 0.95rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: opacity 0.2s;
+    }
+    .btn-primary {
+      background: linear-gradient(135deg, var(--primary), var(--accent));
+      color: #fff;
+    }
+    .btn-secondary {
+      background: #f3f4f6;
+      color: var(--text);
+    }
+    .btn:hover { opacity: 0.9; }
+
+    /* ===== Photo Lightbox ===== */
+    .lightbox {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.9);
+      z-index: 3000;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+    }
+    .lightbox.show { display: flex; }
+    .lightbox img {
+      max-width: 90%;
+      max-height: 90vh;
+      border-radius: 12px;
+    }
+
+    /* ===== Anniversary Modal ===== */
+    .anniversary-modal .form-group { margin-bottom: 16px; }
+
+    /* ===== Empty State ===== */
+    .empty {
+      text-align: center;
+      padding: 48px 20px;
+      color: var(--text-light);
+    }
+    .empty-icon { font-size: 3rem; margin-bottom: 12px; }
+
+    /* ===== Stats ===== */
+    .stats-bar {
+      display: flex;
+      gap: 12px;
+      margin-top: 20px;
+    }
+    .stat-card {
+      flex: 1;
+      background: var(--card);
+      border-radius: 12px;
+      padding: 14px;
+      text-align: center;
+      box-shadow: var(--shadow);
+    }
+    .stat-card .stat-num { font-size: 1.4rem; font-weight: 700; color: var(--primary); }
+    .stat-card .stat-label { font-size: 0.72rem; color: var(--text-light); margin-top: 2px; }
+    .stat-card.accent .stat-num { color: var(--accent); }
+
+    /* ===== Filter ===== */
+    .filter-bar {
+      display: flex;
+      gap: 6px;
+      flex-wrap: wrap;
+      margin-top: 16px;
+    }
+    .filter-btn {
+      padding: 5px 12px;
+      border: 2px solid var(--border);
+      border-radius: 20px;
+      background: var(--card);
+      font-size: 0.78rem;
+      cursor: pointer;
+      transition: all 0.2s;
+      color: var(--text-light);
+    }
+    .filter-btn:hover { border-color: var(--primary-light); color: var(--primary); }
+    .filter-btn.active { background: var(--primary); color: #fff; border-color: var(--primary); }
+
+    /* Responsive */
+    @media (max-width: 480px) {
+      header h1 { font-size: 1.3rem; }
+      .day-counter .num { font-size: 1.6rem; }
+      #map { height: 280px; }
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <h1>💕 思い出ストック</h1>
+  <p>二人の歴史タイムライン</p>
+  <div class="day-counter">
+    <span class="label">付き合って</span>
+    <span class="num" id="dayCount">0</span>
+    <span class="label">日目</span>
+  </div>
+  <div class="anniversary-setting" onclick="openAnniversaryModal()">📅 記念日を設定する</div>
+</header>
+
+<div class="container">
+  <div class="stats-bar">
+    <div class="stat-card">
+      <div class="stat-num" id="memoryCount">0</div>
+      <div class="stat-label">思い出の数</div>
+    </div>
+    <div class="stat-card accent">
+      <div class="stat-num" id="placeCount">0</div>
+      <div class="stat-label">訪れた場所</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-num" id="photoCount">0</div>
+      <div class="stat-label">写真の枚数</div>
+    </div>
+  </div>
+
+  <div class="tabs">
+    <button class="tab active" onclick="switchTab('timeline', this)">📖 タイムライン</button>
+    <button class="tab" onclick="switchTab('map', this)">🗺️ マップ</button>
+  </div>
+
+  <!-- Timeline View -->
+  <div class="timeline-section" id="timelineSection">
+    <div class="filter-bar">
+      <button class="filter-btn active" onclick="setFilter('all', this)">すべて</button>
+      <button class="filter-btn" onclick="setFilter('food', this)">🍽️ グルメ</button>
+      <button class="filter-btn" onclick="setFilter('travel', this)">✈️ 旅行</button>
+      <button class="filter-btn" onclick="setFilter('event', this)">🎉 イベント</button>
+      <button class="filter-btn" onclick="setFilter('daily', this)">☀️ 日常</button>
+      <button class="filter-btn" onclick="setFilter('other', this)">📌 その他</button>
+    </div>
+    <div class="timeline" id="timeline"></div>
+  </div>
+
+  <!-- Map View -->
+  <div class="map-section" id="mapSection" style="display:none;">
+    <div id="map"></div>
+    <div class="map-hint">ピンをクリックすると思い出が見られます</div>
+  </div>
+</div>
+
+<!-- FAB -->
+<button class="fab" onclick="openAddModal()" title="思い出を追加">+</button>
+
+<!-- Add/Edit Modal -->
+<div class="modal-overlay" id="addModal">
+  <div class="modal">
+    <h2 id="modalTitle">✨ 新しい思い出を追加</h2>
+    <input type="hidden" id="editId">
+
+    <div class="form-group">
+      <label>タイトル</label>
+      <input type="text" id="memTitle" placeholder="例：横浜中華街デート">
+    </div>
+
+    <div class="form-group">
+      <label>日付</label>
+      <input type="date" id="memDate">
+    </div>
+
+    <div class="form-group">
+      <label>カテゴリ</label>
+      <select id="memCategory">
+        <option value="food">🍽️ グルメ</option>
+        <option value="travel">✈️ 旅行</option>
+        <option value="event">🎉 イベント</option>
+        <option value="daily">☀️ 日常</option>
+        <option value="other">📌 その他</option>
+      </select>
+    </div>
+
+    <div class="form-group">
+      <label>場所の名前</label>
+      <input type="text" id="memLocationName" placeholder="例：横浜中華街">
+    </div>
+
+    <div class="form-group">
+      <label>場所（地図をクリックしてピンを立てる）</label>
+      <div class="location-picker">
+        <div id="miniMap"></div>
+        <div class="location-picker-hint" id="pickedLocation">📍 地図をタップして場所を選んでください</div>
+      </div>
+    </div>
+
+    <div class="form-group">
+      <label>写真</label>
+      <div class="photo-upload-area" onclick="document.getElementById('photoInput').click()">
+        <div class="upload-icon">📷</div>
+        <div class="upload-text">クリックして写真を選択（複数OK）</div>
+        <input type="file" id="photoInput" accept="image/*" multiple onchange="handlePhotoUpload(event)">
+      </div>
+      <div class="photo-previews" id="photoPreviews"></div>
+    </div>
+
+    <div class="form-group">
+      <label>メモ</label>
+      <textarea id="memMemo" placeholder="思い出の詳細やエピソードなど..."></textarea>
+    </div>
+
+    <div class="modal-actions">
+      <button class="btn btn-secondary" onclick="closeAddModal()">キャンセル</button>
+      <button class="btn btn-primary" onclick="saveMemory()">保存する</button>
+    </div>
+  </div>
+</div>
+
+<!-- Anniversary Setting Modal -->
+<div class="modal-overlay" id="anniversaryModal">
+  <div class="modal anniversary-modal">
+    <h2>📅 記念日を設定</h2>
+    <div class="form-group">
+      <label>付き合い始めた日</label>
+      <input type="date" id="anniversaryDate">
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-secondary" onclick="closeAnniversaryModal()">キャンセル</button>
+      <button class="btn btn-primary" onclick="saveAnniversary()">保存する</button>
+    </div>
+  </div>
+</div>
+
+<!-- Photo Lightbox -->
+<div class="lightbox" id="lightbox" onclick="closeLightbox()">
+  <img id="lightboxImg" src="" alt="">
+</div>
+
+<script>
+  const STORAGE_KEY = 'memoryStock';
+  const ANNIVERSARY_KEY = 'memoryStockAnniversary';
+  const CATEGORIES = {
+    food:   { label: '🍽️ グルメ',       cls: 'cat-food' },
+    travel: { label: '✈️ 旅行',         cls: 'cat-travel' },
+    event:  { label: '🎉 イベント',     cls: 'cat-event' },
+    daily:  { label: '☀️ 日常',         cls: 'cat-daily' },
+    other:  { label: '📌 その他',       cls: 'cat-other' }
+  };
+
+  let memories = JSON.parse(localStorage.getItem(STORAGE_KEY)) || [];
+  let currentFilter = 'all';
+  let currentTab = 'timeline';
+  let mainMap, miniMap, miniMapMarker;
+  let pickedLat = null, pickedLng = null;
+  let tempPhotos = [];
+
+  // ===== Day Counter =====
+  function updateDayCounter() {
+    const ann = localStorage.getItem(ANNIVERSARY_KEY);
+    if (ann) {
+      const start = new Date(ann);
+      const today = new Date();
+      start.setHours(0,0,0,0);
+      today.setHours(0,0,0,0);
+      const diff = Math.floor((today - start) / (1000 * 60 * 60 * 24)) + 1;
+      document.getElementById('dayCount').textContent = diff > 0 ? diff : 0;
+      document.querySelector('.anniversary-setting').textContent = `📅 ${formatDate(ann)}から`;
+    }
+  }
+
+  function openAnniversaryModal() {
+    const ann = localStorage.getItem(ANNIVERSARY_KEY);
+    if (ann) document.getElementById('anniversaryDate').value = ann;
+    document.getElementById('anniversaryModal').classList.add('show');
+  }
+
+  function closeAnniversaryModal() {
+    document.getElementById('anniversaryModal').classList.remove('show');
+  }
+
+  function saveAnniversary() {
+    const date = document.getElementById('anniversaryDate').value;
+    if (!date) return;
+    localStorage.setItem(ANNIVERSARY_KEY, date);
+    updateDayCounter();
+    closeAnniversaryModal();
+  }
+
+  // ===== Tabs =====
+  function switchTab(tab, btn) {
+    currentTab = tab;
+    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+    btn.classList.add('active');
+    document.getElementById('timelineSection').style.display = tab === 'timeline' ? '' : 'none';
+    document.getElementById('mapSection').style.display = tab === 'map' ? '' : 'none';
+    if (tab === 'map') {
+      setTimeout(() => {
+        if (!mainMap) initMainMap();
+        else mainMap.invalidateSize();
+        renderMapPins();
+      }, 100);
+    }
+  }
+
+  // ===== Main Map =====
+  function initMainMap() {
+    mainMap = L.map('map').setView([35.68, 139.76], 11);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution: '&copy; OpenStreetMap contributors'
+    }).addTo(mainMap);
+  }
+
+  function renderMapPins() {
+    if (!mainMap) return;
+    mainMap.eachLayer(l => { if (l instanceof L.Marker) mainMap.removeLayer(l); });
+    const withLocation = memories.filter(m => m.lat && m.lng);
+    if (withLocation.length === 0) return;
+
+    const bounds = [];
+    withLocation.forEach(m => {
+      const cat = CATEGORIES[m.category] || CATEGORIES.other;
+      const marker = L.marker([m.lat, m.lng]).addTo(mainMap);
+      const photoHtml = m.photos && m.photos.length > 0
+        ? `<img src="${m.photos[0]}" style="width:100%;max-height:120px;object-fit:cover;border-radius:8px;margin-top:6px;">`
+        : '';
+      marker.bindPopup(`
+        <div style="min-width:160px;">
+          <strong>${escapeHtml(m.title)}</strong><br>
+          <span style="font-size:0.8rem;color:#888;">${formatDate(m.date)} | ${m.locationName || ''}</span>
+          ${photoHtml}
+          ${m.memo ? `<p style="font-size:0.8rem;margin-top:6px;">${escapeHtml(m.memo)}</p>` : ''}
+        </div>
+      `);
+      bounds.push([m.lat, m.lng]);
+    });
+    if (bounds.length > 1) mainMap.fitBounds(bounds, { padding: [30, 30] });
+    else if (bounds.length === 1) mainMap.setView(bounds[0], 14);
+  }
+
+  // ===== Mini Map (in modal) =====
+  function initMiniMap() {
+    if (miniMap) { miniMap.remove(); miniMap = null; }
+    miniMap = L.map('miniMap').setView([35.68, 139.76], 11);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution: '&copy; OSM'
+    }).addTo(miniMap);
+    miniMap.on('click', function(e) {
+      pickedLat = e.latlng.lat;
+      pickedLng = e.latlng.lng;
+      if (miniMapMarker) miniMap.removeLayer(miniMapMarker);
+      miniMapMarker = L.marker([pickedLat, pickedLng]).addTo(miniMap);
+      document.getElementById('pickedLocation').textContent = `📍 ${pickedLat.toFixed(4)}, ${pickedLng.toFixed(4)}`;
+    });
+  }
+
+  // ===== Photo Upload =====
+  function handlePhotoUpload(event) {
+    const files = event.target.files;
+    Array.from(files).forEach(file => {
+      if (tempPhotos.length >= 8) return;
+      const reader = new FileReader();
+      reader.onload = function(e) {
+        compressImage(e.target.result, 800, 0.7, (compressed) => {
+          tempPhotos.push(compressed);
+          renderPhotoPreviews();
+        });
+      };
+      reader.readAsDataURL(file);
+    });
+    event.target.value = '';
+  }
+
+  function compressImage(dataUrl, maxSize, quality, callback) {
+    const img = new Image();
+    img.onload = function() {
+      const canvas = document.createElement('canvas');
+      let w = img.width, h = img.height;
+      if (w > maxSize || h > maxSize) {
+        if (w > h) { h = Math.round(h * maxSize / w); w = maxSize; }
+        else { w = Math.round(w * maxSize / h); h = maxSize; }
+      }
+      canvas.width = w;
+      canvas.height = h;
+      canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+      callback(canvas.toDataURL('image/jpeg', quality));
+    };
+    img.src = dataUrl;
+  }
+
+  function renderPhotoPreviews() {
+    const container = document.getElementById('photoPreviews');
+    container.innerHTML = tempPhotos.map((p, i) => `
+      <div class="preview-item">
+        <img src="${p}" alt="">
+        <button class="remove-photo" onclick="removePhoto(${i})">✕</button>
+      </div>
+    `).join('');
+  }
+
+  function removePhoto(index) {
+    tempPhotos.splice(index, 1);
+    renderPhotoPreviews();
+  }
+
+  // ===== Add/Edit Modal =====
+  function openAddModal() {
+    document.getElementById('editId').value = '';
+    document.getElementById('modalTitle').textContent = '✨ 新しい思い出を追加';
+    document.getElementById('memTitle').value = '';
+    document.getElementById('memDate').value = new Date().toISOString().slice(0, 10);
+    document.getElementById('memCategory').value = 'food';
+    document.getElementById('memLocationName').value = '';
+    document.getElementById('memMemo').value = '';
+    pickedLat = null;
+    pickedLng = null;
+    tempPhotos = [];
+    renderPhotoPreviews();
+    document.getElementById('pickedLocation').textContent = '📍 地図をタップして場所を選んでください';
+    document.getElementById('addModal').classList.add('show');
+    setTimeout(() => initMiniMap(), 200);
+  }
+
+  function openEditModal(id) {
+    const m = memories.find(x => x.id === id);
+    if (!m) return;
+    document.getElementById('editId').value = id;
+    document.getElementById('modalTitle').textContent = '✏️ 思い出を編集';
+    document.getElementById('memTitle').value = m.title;
+    document.getElementById('memDate').value = m.date;
+    document.getElementById('memCategory').value = m.category;
+    document.getElementById('memLocationName').value = m.locationName || '';
+    document.getElementById('memMemo').value = m.memo || '';
+    pickedLat = m.lat;
+    pickedLng = m.lng;
+    tempPhotos = m.photos ? [...m.photos] : [];
+    renderPhotoPreviews();
+    document.getElementById('pickedLocation').textContent = m.lat
+      ? `📍 ${m.lat.toFixed(4)}, ${m.lng.toFixed(4)}`
+      : '📍 地図をタップして場所を選んでください';
+    document.getElementById('addModal').classList.add('show');
+    setTimeout(() => {
+      initMiniMap();
+      if (m.lat && m.lng) {
+        miniMap.setView([m.lat, m.lng], 14);
+        miniMapMarker = L.marker([m.lat, m.lng]).addTo(miniMap);
+      }
+    }, 200);
+  }
+
+  function closeAddModal() {
+    document.getElementById('addModal').classList.remove('show');
+    if (miniMap) { miniMap.remove(); miniMap = null; miniMapMarker = null; }
+  }
+
+  function saveMemory() {
+    const title = document.getElementById('memTitle').value.trim();
+    if (!title) { document.getElementById('memTitle').focus(); return; }
+
+    const editId = document.getElementById('editId').value;
+    const data = {
+      id: editId ? parseInt(editId) : Date.now(),
+      title,
+      date: document.getElementById('memDate').value,
+      category: document.getElementById('memCategory').value,
+      locationName: document.getElementById('memLocationName').value.trim(),
+      lat: pickedLat,
+      lng: pickedLng,
+      photos: [...tempPhotos],
+      memo: document.getElementById('memMemo').value.trim(),
+      createdAt: editId ? memories.find(m => m.id === parseInt(editId))?.createdAt : new Date().toISOString()
+    };
+
+    if (editId) {
+      const idx = memories.findIndex(m => m.id === parseInt(editId));
+      if (idx !== -1) memories[idx] = data;
+    } else {
+      memories.unshift(data);
+    }
+
+    save();
+    closeAddModal();
+    render();
+  }
+
+  function deleteMemory(id) {
+    if (!confirm('この思い出を削除しますか？')) return;
+    memories = memories.filter(m => m.id !== id);
+    save();
+    render();
+  }
+
+  // ===== Filter =====
+  function setFilter(filter, btn) {
+    currentFilter = filter;
+    document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    render();
+  }
+
+  // ===== Lightbox =====
+  function openLightbox(src) {
+    document.getElementById('lightboxImg').src = src;
+    document.getElementById('lightbox').classList.add('show');
+  }
+  function closeLightbox() {
+    document.getElementById('lightbox').classList.remove('show');
+  }
+
+  // ===== Render =====
+  function render() {
+    const sorted = [...memories].sort((a, b) => new Date(b.date) - new Date(a.date));
+    const filtered = sorted.filter(m => currentFilter === 'all' || m.category === currentFilter);
+
+    document.getElementById('memoryCount').textContent = memories.length;
+    const places = new Set(memories.filter(m => m.locationName).map(m => m.locationName));
+    document.getElementById('placeCount').textContent = places.size;
+    document.getElementById('photoCount').textContent = memories.reduce((sum, m) => sum + (m.photos ? m.photos.length : 0), 0);
+
+    const timeline = document.getElementById('timeline');
+
+    if (filtered.length === 0) {
+      timeline.innerHTML = `
+        <div class="empty">
+          <div class="empty-icon">${memories.length === 0 ? '💑' : '🔍'}</div>
+          <p>${memories.length === 0 ? 'まだ思い出がありません<br>＋ボタンから最初の思い出を追加しよう！' : 'この条件の思い出はありません'}</p>
+        </div>`;
+      return;
+    }
+
+    timeline.innerHTML = filtered.map(m => {
+      const cat = CATEGORIES[m.category] || CATEGORIES.other;
+      const photosHtml = m.photos && m.photos.length > 0
+        ? `<div class="tl-photos">${m.photos.map(p => `<img src="${p}" alt="" onclick="event.stopPropagation(); openLightbox('${p.replace(/'/g, "\\'")}')">`).join('')}</div>`
+        : '';
+      return `
+        <div class="tl-item">
+          <div class="tl-dot"></div>
+          <div class="tl-card" onclick="openEditModal(${m.id})">
+            <div class="tl-date">${formatDate(m.date)}</div>
+            <div class="tl-title">${escapeHtml(m.title)}</div>
+            ${m.locationName ? `<div class="tl-location">📍 ${escapeHtml(m.locationName)}</div>` : ''}
+            ${photosHtml}
+            ${m.memo ? `<div class="tl-memo">${escapeHtml(m.memo)}</div>` : ''}
+            <span class="tl-category ${cat.cls}">${cat.label}</span>
+            <div class="tl-actions">
+              <button class="del" onclick="event.stopPropagation(); deleteMemory(${m.id})">🗑️ 削除</button>
+            </div>
+          </div>
+        </div>`;
+    }).join('');
+
+    if (currentTab === 'map') renderMapPins();
+  }
+
+  // ===== Utils =====
+  function save() {
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(memories));
+    } catch (e) {
+      alert('ストレージの容量が不足しています。写真の枚数を減らしてください。');
+    }
+  }
+
+  function formatDate(dateStr) {
+    const d = new Date(dateStr);
+    const months = ['1月','2月','3月','4月','5月','6月','7月','8月','9月','10月','11月','12月'];
+    return `${d.getFullYear()}年${months[d.getMonth()]}${d.getDate()}日`;
+  }
+
+  function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+  }
+
+  // ===== Init =====
+  updateDayCounter();
+  render();
+</script>
+
+</body>
+</html>
